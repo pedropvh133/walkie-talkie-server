@@ -1,12 +1,13 @@
 {
   "name": "walkie-talkie-relay",
   "version": "1.0.0",
-  "description": "Servidor de relé para Walkie-Talkie usando WebSockets",
+  "description": "Servidor de relé para Walkie-Talkie com Painel Admin e Upload",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "formidable": "^3.5.1"
   }
 }

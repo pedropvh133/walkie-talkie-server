@@ -1,46 +1,142 @@
 const WebSocket = require('ws');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const formidable = require('formidable');
 
 const PORT = process.env.PORT || 10000;
-const APP_URL = 'https://conexao-sempre.onrender.com/ping';
+const ADMIN_PASSWORD = 'pedropvh133@gmail.com/admin';
+const APP_URL = 'https://conexao-sempre.onrender.com';
 
-// PAINEL DE CONTROLE DE ATUALIZAÇÃO
-const UPDATE_CONFIG = {
-  latestVersion: 2, // Aumente este número para forçar a atualização
-  downloadUrl: 'https://seu-link-de-download-aqui.com/app.apk', // Link do novo APK
+// Criar pasta de uploads se não existir
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR);
+}
+
+// CONFIGURAÇÃO INICIAL
+let UPDATE_CONFIG = {
+  latestVersion: 1,
+  downloadUrl: `${APP_URL}/download-apk`,
   message: 'Nova atualização disponível! Melhore sua conexão agora.'
 };
 
-// Servidor HTTP para o Render (Health Check, Keep-Alive e Update Check)
 const server = http.createServer((req, res) => {
-  if (req.url === '/ping') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('pong');
-  } else if (req.url === '/update-check') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(UPDATE_CONFIG));
-  } else {
-    res.writeHead(404);
-    res.end();
+  // 1. ENDPOINT DE DOWNLOAD DO APK
+  if (req.url === '/download-apk') {
+    const apkPath = path.join(UPLOAD_DIR, 'app.apk');
+    if (fs.existsSync(apkPath)) {
+      res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive' });
+      return fs.createReadStream(apkPath).pipe(res);
+    } else {
+      res.writeHead(404);
+      return res.end('Nenhum APK disponível. Faça o upload no painel admin.');
+    }
   }
+
+  // 2. ENDPOINT DE CHECK DE ATUALIZAÇÃO (USADO PELO APP)
+  if (req.url === '/update-check') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(UPDATE_CONFIG));
+  }
+
+  // 3. PING PARA KEEP-ALIVE
+  if (req.url === '/ping') {
+    res.writeHead(200);
+    return res.end('pong');
+  }
+
+  // 4. PAINEL ADMIN
+  if (req.url === '/admin') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>ADMIN - CONEXÃO SEMPRE</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
+          .card { background: #1B5E20; padding: 20px; border-radius: 10px; display: inline-block; text-align: left; max-width: 400px; width: 100%; border: 2px solid #FBC02D; }
+          input, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
+          button { background: #FBC02D; color: black; font-weight: bold; cursor: pointer; }
+          .warning { color: #FBC02D; font-size: 0.8em; }
+        </style>
+      </head>
+      <body>
+        <h1>🛡️ Painel de Controle</h1>
+        <div class="card">
+          <form action="/admin/update" method="POST" enctype="multipart/form-data">
+            <label>Senha Admin:</label>
+            <input type="password" name="password" required>
+            <hr>
+            <label>Versão Obrigatória (Número):</label>
+            <input type="number" name="version" value="${UPDATE_CONFIG.latestVersion}" required>
+            <label>Mensagem para Usuários:</label>
+            <input type="text" name="message" value="${UPDATE_CONFIG.message}">
+            <label>Upload do novo APK:</label>
+            <input type="file" name="apk">
+            <p class="warning">⚠️ Nota: No Render grátis, você deve reenviar o APK se o servidor reiniciar.</p>
+            <button type="submit">APLICAR MUDANÇAS E BLOQUEAR APP</button>
+          </form>
+        </div>
+        <p>Dispositivos Online: <span id="count">...</span></p>
+      </body>
+      </html>
+    `);
+  }
+
+  // 5. PROCESSAR ATUALIZAÇÃO DO ADMIN
+  if (req.url === '/admin/update' && req.method === 'POST') {
+    const form = new formidable.IncomingForm();
+    form.uploadDir = UPLOAD_DIR;
+    form.keepExtensions = true;
+
+    form.parse(req, (err, fields, files) => {
+      if (err) { res.writeHead(500); return res.end('Erro no formulário'); }
+
+      // Verificar Senha
+      if (fields.password[0] !== ADMIN_PASSWORD) {
+        res.writeHead(401);
+        return res.end('Senha Incorreta!');
+      }
+
+      // Atualizar Configurações
+      UPDATE_CONFIG.latestVersion = parseInt(fields.version[0]);
+      UPDATE_CONFIG.message = fields.message[0];
+
+      // Se houver arquivo, renomear para app.apk
+      const uploadedFile = files.apk[0];
+      if (uploadedFile && uploadedFile.size > 0) {
+        const newPath = path.join(UPLOAD_DIR, 'app.apk');
+        fs.renameSync(uploadedFile.filepath, newPath);
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<h1>✅ Atualizado com sucesso!</h1><a href="/admin">Voltar</a>');
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
 });
 
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
-  console.log('Novo dispositivo conectado');
+  wss.clients.forEach(client => {
+     // Broadcast do contador para o admin se necessário
+  });
 
   ws.on('message', (data, isBinary) => {
-    // Reencaminha mensagens de áudio e sinais (TALK_START/STOP)
     wss.clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(data, { binary: isBinary });
       }
     });
   });
-
-  ws.on('close', () => console.log('Dispositivo desconectado'));
 });
 
 server.listen(PORT, () => {
@@ -49,9 +145,5 @@ server.listen(PORT, () => {
 
 // Mecanismo Keep-Alive
 setInterval(() => {
-  https.get(APP_URL, (res) => {
-    console.log(`Self-ping: Status ${res.statusCode}`);
-  }).on('error', (err) => {
-    console.error(`Erro no Self-ping: ${err.message}`);
-  });
+  https.get(`${APP_URL}/ping`, (res) => {}).on('error', (err) => {});
 }, 600000);
