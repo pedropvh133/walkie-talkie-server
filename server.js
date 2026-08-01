@@ -5,6 +5,22 @@ const fs = require('fs');
 const path = require('path');
 const formidable = require('formidable');
 
+const STATS_FILE = path.join(__dirname, 'stats.json');
+
+// Carregar estatísticas iniciais
+let stats = { totalInstalls: 0 };
+if (fs.existsSync(STATS_FILE)) {
+  try {
+    stats = JSON.parse(fs.readFileSync(STATS_FILE));
+  } catch (e) {
+    console.error("Erro ao ler stats.json", e);
+  }
+}
+
+function saveStats() {
+  fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
+}
+
 const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = 'pedropvh133@gmail.com/admin';
 const APP_URL = 'https://conexao-sempre.onrender.com';
@@ -37,8 +53,17 @@ const server = http.createServer((req, res) => {
 
   // 2. ENDPOINT DE CHECK DE ATUALIZAÇÃO (USADO PELO APP)
   if (req.url === '/update-check') {
+    // Incrementar total de instalações (cada vez que o app verifica atualização, conta como um "uso")
+    stats.totalInstalls++;
+    saveStats();
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify(UPDATE_CONFIG));
+    const responseData = {
+      ...UPDATE_CONFIG,
+      totalInstalls: stats.totalInstalls,
+      onlineUsers: wss ? wss.clients.size : 0
+    };
+    return res.end(JSON.stringify(responseData));
   }
 
   // 3. PING PARA KEEP-ALIVE
@@ -67,6 +92,10 @@ const server = http.createServer((req, res) => {
       <body>
         <h1>🛡️ Painel de Controle</h1>
         <div class="card">
+          <h2>Estatísticas</h2>
+          <p>Total de Instalações: <strong>${stats.totalInstalls}</strong></p>
+          <p>Usuários Online: <strong>${wss ? wss.clients.size : 0}</strong></p>
+          <hr>
           <form action="/admin/update" method="POST" enctype="multipart/form-data">
             <label>Senha Admin:</label>
             <input type="password" name="password" required>
@@ -81,7 +110,6 @@ const server = http.createServer((req, res) => {
             <button type="submit">APLICAR MUDANÇAS E BLOQUEAR APP</button>
           </form>
         </div>
-        <p>Dispositivos Online: <span id="count">...</span></p>
       </body>
       </html>
     `);
@@ -125,9 +153,24 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+function broadcastStats() {
+  const data = JSON.stringify({
+    type: 'STATS_UPDATE',
+    totalInstalls: stats.totalInstalls,
+    onlineUsers: wss.clients.size
+  });
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
 wss.on('connection', (ws) => {
-  wss.clients.forEach(client => {
-     // Broadcast do contador para o admin se necessário
+  broadcastStats();
+
+  ws.on('close', () => {
+    broadcastStats();
   });
 
   ws.on('message', (data, isBinary) => {
