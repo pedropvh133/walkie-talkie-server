@@ -241,8 +241,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
-function broadcastStats() {
-  const onlineCount = Array.from(wss.clients).filter(c => c.readyState === WebSocket.OPEN).length;
+function broadcastStats(offset = 0) {
+  let onlineCount = Array.from(wss.clients).filter(c => c.readyState === WebSocket.OPEN).length;
+  onlineCount += offset;
+  if (onlineCount < 0) onlineCount = 0;
+
   const data = JSON.stringify({
     type: 'STATS_UPDATE',
     totalInstalls: stats.totalInstalls,
@@ -265,8 +268,12 @@ wss.on('connection', (ws) => {
   ws.on('message', (data, isBinary) => {
     // Se for o aviso de entrada ou saída do app, força atualização das estatísticas para todos
     const msg = data.toString();
-    if (!isBinary && (msg === 'USER_EXIT' || msg === 'USER_JOIN')) {
-      broadcastStats();
+    if (!isBinary) {
+      if (msg === 'USER_EXIT') {
+        broadcastStats(-1); // Subtrai o usuário que está saindo instantaneamente
+      } else if (msg === 'USER_JOIN') {
+        broadcastStats(0); // Atualiza com o novo usuário já contado
+      }
     }
 
     wss.clients.forEach((client) => {
