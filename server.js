@@ -74,10 +74,11 @@ const server = http.createServer((req, res) => {
   // 2. ENDPOINT DE CHECK DE ATUALIZAÇÃO (USADO PELO APP)
   if (req.url.startsWith('/update-check')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
+    const onlineCount = wss ? Array.from(wss.clients).filter(c => c.readyState === WebSocket.OPEN).length : 0;
     const responseData = {
       ...UPDATE_CONFIG,
       totalInstalls: stats.totalInstalls,
-      onlineUsers: wss ? wss.clients.size : 0
+      onlineUsers: onlineCount
     };
     return res.end(JSON.stringify(responseData));
   }
@@ -241,10 +242,11 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocket.Server({ server });
 
 function broadcastStats() {
+  const onlineCount = Array.from(wss.clients).filter(c => c.readyState === WebSocket.OPEN).length;
   const data = JSON.stringify({
     type: 'STATS_UPDATE',
     totalInstalls: stats.totalInstalls,
-    onlineUsers: wss.clients.size
+    onlineUsers: onlineCount
   });
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
