@@ -52,11 +52,7 @@ const server = http.createServer((req, res) => {
   }
 
   // 2. ENDPOINT DE CHECK DE ATUALIZAÇÃO (USADO PELO APP)
-  if (req.url === '/update-check') {
-    // Incrementar total de instalações (cada vez que o app verifica atualização, conta como um "uso")
-    stats.totalInstalls++;
-    saveStats();
-
+  if (req.url.startsWith('/update-check')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     const responseData = {
       ...UPDATE_CONFIG,
@@ -64,6 +60,15 @@ const server = http.createServer((req, res) => {
       onlineUsers: wss ? wss.clients.size : 0
     };
     return res.end(JSON.stringify(responseData));
+  }
+
+  // 2.1 ENDPOINT PARA REGISTRAR NOVA INSTALAÇÃO/SESSÃO
+  if (req.url === '/register-install') {
+    stats.totalInstalls++;
+    saveStats();
+    broadcastStats(); // Notificar todos sobre o novo total
+    res.writeHead(200);
+    return res.end('ok');
   }
 
   // 3. PING PARA KEEP-ALIVE
