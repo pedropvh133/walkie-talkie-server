@@ -263,6 +263,11 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', (data, isBinary) => {
+    // Se for o aviso de saída do app, força atualização das estatísticas para todos
+    if (!isBinary && data.toString() === 'USER_EXIT') {
+      broadcastStats();
+    }
+
     wss.clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(data, { binary: isBinary });
