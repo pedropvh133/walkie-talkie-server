@@ -146,8 +146,9 @@ const server = http.createServer((req, res) => {
           </div>
 
           <form action="/admin/add-pass" method="POST" style="background: #1B5E20; border: 1px solid #FBC02D; padding: 10px; border-radius: 5px;">
-            <label>Adicionar Nova Senha:</label>
-            <input type="hidden" name="password" value="${ADMIN_PASSWORD}">
+            <label>Confirmar Senha Admin:</label>
+            <input type="password" name="password" required>
+            <label>Adicionar Nova Senha de Acesso:</label>
             <input type="text" name="new_pass" placeholder="Ex: RODRIGO2026" required>
             <button type="submit">CADASTRAR SENHA</button>
           </form>
