@@ -263,8 +263,9 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', (data, isBinary) => {
-    // Se for o aviso de saída do app, força atualização das estatísticas para todos
-    if (!isBinary && data.toString() === 'USER_EXIT') {
+    // Se for o aviso de entrada ou saída do app, força atualização das estatísticas para todos
+    const msg = data.toString();
+    if (!isBinary && (msg === 'USER_EXIT' || msg === 'USER_JOIN')) {
       broadcastStats();
     }
 
