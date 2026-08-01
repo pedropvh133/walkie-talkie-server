@@ -8,10 +8,11 @@ const formidable = require('formidable');
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // Carregar estatísticas iniciais
-let stats = { totalInstalls: 0 };
+let stats = { totalInstalls: 0, validPasswords: [] };
 if (fs.existsSync(STATS_FILE)) {
   try {
     stats = JSON.parse(fs.readFileSync(STATS_FILE));
+    if (!stats.validPasswords) stats.validPasswords = [];
   } catch (e) {
     console.error("Erro ao ler stats.json", e);
   }
@@ -35,8 +36,27 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 let UPDATE_CONFIG = {
   latestVersion: 1,
   downloadUrl: `${APP_URL}/download-apk`,
+  shortUrl: `${APP_URL}/download-apk`, // Fallback inicial
   message: 'Nova atualização disponível! Melhore sua conexão agora.'
 };
+
+function getShortLink(url) {
+  https.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`, (res) => {
+    let data = '';
+    res.on('data', (chunk) => data += chunk);
+    res.on('end', () => {
+      if (data.startsWith('https://')) {
+        UPDATE_CONFIG.shortUrl = data;
+        console.log("Link Encurtado:", data);
+      }
+    });
+  }).on('error', (err) => {
+    console.error("Erro ao encurtar link:", err.message);
+  });
+}
+
+// Tentar encurtar o link inicial após o servidor subir
+setTimeout(() => getShortLink(UPDATE_CONFIG.downloadUrl), 5000);
 
 const server = http.createServer((req, res) => {
   // 1. ENDPOINT DE DOWNLOAD DO APK
@@ -71,6 +91,19 @@ const server = http.createServer((req, res) => {
     return res.end('ok');
   }
 
+  // 2.2 VERIFICAR SENHA DO APP
+  if (req.url.startsWith('/verify-password')) {
+    const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
+    const pass = urlParams.get('pass');
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (stats.validPasswords.includes(pass)) {
+      return res.end(JSON.stringify({ status: 'authorized' }));
+    } else {
+      return res.end(JSON.stringify({ status: 'denied' }));
+    }
+  }
+
   // 3. PING PARA KEEP-ALIVE
   if (req.url === '/ping') {
     res.writeHead(200);
@@ -101,12 +134,31 @@ const server = http.createServer((req, res) => {
           <p>Total de Instalações: <strong>${stats.totalInstalls}</strong></p>
           <p>Usuários Online: <strong>${wss ? wss.clients.size : 0}</strong></p>
           <hr>
+          <h2>Senhas Ativas</h2>
+          <div style="background: #2E7D32; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+            ${stats.validPasswords.length > 0 ? stats.validPasswords.map(p => `
+              <div style="display:flex; justify-content: space-between; margin-bottom: 5px;">
+                <span>🔑 ${p}</span>
+                <a href="/admin/remove-pass?password=${ADMIN_PASSWORD}&pass=${p}" style="color: #FF5252; text-decoration:none; font-weight:bold;">[EXCLUIR]</a>
+              </div>
+            `).join('') : '<p>Nenhuma senha cadastrada.</p>'}
+          </div>
+
+          <form action="/admin/add-pass" method="POST" style="background: #1B5E20; border: 1px solid #FBC02D; padding: 10px; border-radius: 5px;">
+            <label>Adicionar Nova Senha:</label>
+            <input type="hidden" name="password" value="${ADMIN_PASSWORD}">
+            <input type="text" name="new_pass" placeholder="Ex: RODRIGO2026" required>
+            <button type="submit">CADASTRAR SENHA</button>
+          </form>
+          <hr>
           <form action="/admin/update" method="POST" enctype="multipart/form-data">
             <label>Senha Admin:</label>
             <input type="password" name="password" required>
             <hr>
             <label>Versão Obrigatória (Número):</label>
             <input type="number" name="version" value="${UPDATE_CONFIG.latestVersion}" required>
+            <label>Link Curto Atual:</label>
+            <input type="text" value="${UPDATE_CONFIG.shortUrl}" readonly>
             <label>Mensagem para Usuários:</label>
             <input type="text" name="message" value="${UPDATE_CONFIG.message}">
             <label>Upload do novo APK:</label>
@@ -144,11 +196,41 @@ const server = http.createServer((req, res) => {
       if (uploadedFile && uploadedFile.size > 0) {
         const newPath = path.join(UPLOAD_DIR, 'app.apk');
         fs.renameSync(uploadedFile.filepath, newPath);
+        // Ao subir novo APK, atualizar link curto
+        getShortLink(UPDATE_CONFIG.downloadUrl);
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end('<h1>✅ Atualizado com sucesso!</h1><a href="/admin">Voltar</a>');
     });
+    return;
+  }
+
+  // 6. ADICIONAR SENHA
+  if (req.url === '/admin/add-pass' && req.method === 'POST') {
+    const form = new formidable.IncomingForm();
+    form.parse(req, (err, fields) => {
+      if (fields.password[0] !== ADMIN_PASSWORD) { res.writeHead(401); return res.end('Erro'); }
+      const newPass = fields.new_pass[0].trim();
+      if (newPass && !stats.validPasswords.includes(newPass)) {
+        stats.validPasswords.push(newPass);
+        saveStats();
+      }
+      res.writeHead(302, { 'Location': '/admin' });
+      res.end();
+    });
+    return;
+  }
+
+  // 7. REMOVER SENHA
+  if (req.url.startsWith('/admin/remove-pass')) {
+    const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
+    if (urlParams.get('password') !== ADMIN_PASSWORD) { res.writeHead(401); return res.end('Erro'); }
+    const passToRemove = urlParams.get('pass');
+    stats.validPasswords = stats.validPasswords.filter(p => p !== passToRemove);
+    saveStats();
+    res.writeHead(302, { 'Location': '/admin' });
+    res.end();
     return;
   }
 
