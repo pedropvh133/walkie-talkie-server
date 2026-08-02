@@ -105,10 +105,10 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // 3. PING PARA KEEP-ALIVE
+  // 3. PING PARA KEEP-ALIVE (RESPOSTA ULTRA-LEVE)
   if (req.url === '/ping') {
     res.writeHead(200);
-    return res.end('pong');
+    return res.end('ok');
   }
 
   // 4. PAINEL ADMIN
@@ -289,7 +289,7 @@ server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
 
-// Mecanismo Keep-Alive
+// Mecanismo Keep-Alive (Motor interno para evitar o sono enquanto ativo)
 setInterval(() => {
   https.get(`${APP_URL}/ping`, (res) => {}).on('error', (err) => {});
-}, 600000);
+}, 300000); // 5 minutos (300.000ms)
