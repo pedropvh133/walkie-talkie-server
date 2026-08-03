@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CONEXÃO SEMPRE - RADIO</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Radio">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #loginScreen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #loginScreen h1 { color: #FBC02D; font-size: 20px; }
+        #passwordInput {
+            padding: 15px;
+            margin: 20px;
+            width: 250px;
+            background: #222;
+            border: 2px solid #FBC02D;
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            border-radius: 8px;
+        }
+        #btnLogin {
+            background: #FBC02D;
+            color: black;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .radio-body {
+            position: relative;
+            width: 90vw;
+            max-width: 400px;
+            height: 180vw;
+            max-height: 800px;
+            background: linear-gradient(to right, #121212, #2A2A2A 50%, #121212);
+            border-radius: 30px;
+            border: 2px solid #333;
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+        }
+
+        .antenna {
+            position: absolute;
+            top: -60px;
+            left: 20%;
+            width: 40px;
+            height: 80px;
+            background: linear-gradient(to right, #1A1A1A, #333 50%, #000);
+            border-radius: 5px 5px 0 0;
+        }
+
+        .screen-bezel {
+            position: absolute;
+            top: 15%;
+            left: 10%;
+            width: 80%;
+            height: 20%;
+            background: #111;
+            border: 4px solid #080808;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #radioScreen {
+            width: 90%;
+            height: 85%;
+            background-color: #004D40;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.3s;
+            text-align: center;
+        }
+
+        #radioScreen.active { background-color: #4A0000; }
+
+        .header-text { font-size: 16px; font-weight: bold; color: rgba(255,255,255,0.9); margin-bottom: 5px; }
+        .status-text { font-size: 11px; color: rgba(255,255,255,0.7); }
+        .stats-text { font-size: 22px; font-weight: bold; color: #fff; margin-top: 5px; }
+
+        .led {
+            position: absolute;
+            top: 36%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background: #333;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .led.active { background: #2196F3; box-shadow: 0 0 10px #2196F3; border: 1px solid white; }
+
+        .speaker-grille {
+            position: absolute;
+            top: 42%;
+            left: 15%;
+            width: 70%;
+            height: 15%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+        }
+
+        .grille-line { height: 4px; background: #1A1A1A; border-radius: 2px; }
+
+        #pttButton {
+            position: absolute;
+            bottom: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            height: 160px;
+            background: #2C2C2C;
+            border: 4px solid #1A1A1A;
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.1s;
+            box-shadow: 0 5px 0 #111;
+            touch-action: none;
+        }
+
+        #pttButton:active, #pttButton.pressed {
+            background: #1976D2;
+            transform: translateX(-50%) translateY(3px);
+            box-shadow: 0 2px 0 #111;
+        }
+
+        .footer-text {
+            position: absolute;
+            bottom: 60px;
+            width: 100%;
+            text-align: center;
+            font-size: 9px;
+            color: #444;
+            letter-spacing: 2px;
+        }
+
+        #btnDownloadAPK {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #FBC02D;
+            text-decoration: none;
+            font-size: 10px;
+            border: 1px solid #FBC02D;
+            padding: 5px 10px;
+            border-radius: 5px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loginScreen">
+        <h1>CONEXÃO SEMPRE</h1>
+        <input type="text" id="passwordInput" placeholder="INSIRA A SENHA" autofocus>
+        <button id="btnLogin">ENTRAR NO RÁDIO</button>
+        <p id="errorText" style="color: red; margin-top: 10px; display: none;">SENHA INCORRETA!</p>
+    </div>
+
+    <div class="radio-body">
+        <div class="antenna"></div>
+
+        <div class="screen-bezel">
+            <div id="radioScreen">
+                <div class="header-text">CONEXÃO SEMPRE</div>
+                <div id="statusText" class="status-text">DISPONÍVEL</div>
+                <div id="statsText" class="stats-text">0/0</div>
+            </div>
+        </div>
+
+        <div id="led" class="led"></div>
+
+        <div class="speaker-grille">
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+            <div class="grille-line"></div>
+        </div>
+
+        <div id="pttButton">FALAR</div>
+
+        <div class="footer-text">SISTEMA DE COMUNICAÇÃO PRIVADA</div>
+        <a href="/download-apk" id="btnDownloadAPK">BAIXAR APP (ANDROID)</a>
+    </div>
+
+    <script src="/radio.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</body>
+</html>

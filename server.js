@@ -36,18 +36,24 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 let UPDATE_CONFIG = {
   latestVersion: 1,
   downloadUrl: `${APP_URL}/download-apk`,
-  shortUrl: `${APP_URL}/download-apk`, // Fallback inicial
+  shortUrl: `${APP_URL}/download-apk`, // Link curto do APK
+  shortWebUrl: APP_URL, // Link curto da Web/iPhone
   message: 'Nova atualização disponível! Melhore sua conexão agora.'
 };
 
-function getShortLink(url) {
+function getShortLink(url, isWeb = false) {
   https.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`, (res) => {
     let data = '';
     res.on('data', (chunk) => data += chunk);
     res.on('end', () => {
       if (data.startsWith('https://')) {
-        UPDATE_CONFIG.shortUrl = data;
-        console.log("Link Encurtado:", data);
+        if (isWeb) {
+            UPDATE_CONFIG.shortWebUrl = data;
+            console.log("Link Curto Web/iPhone:", data);
+        } else {
+            UPDATE_CONFIG.shortUrl = data;
+            console.log("Link Curto APK:", data);
+        }
       }
     });
   }).on('error', (err) => {
@@ -55,10 +61,31 @@ function getShortLink(url) {
   });
 }
 
-// Tentar encurtar o link inicial após o servidor subir
-setTimeout(() => getShortLink(UPDATE_CONFIG.downloadUrl), 5000);
+// Tentar encurtar os links após o servidor subir
+setTimeout(() => {
+    getShortLink(UPDATE_CONFIG.downloadUrl, false);
+    getShortLink(APP_URL, true);
+}, 5000);
 
 const server = http.createServer((req, res) => {
+  // 0. PWA STATIC FILES
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return fs.createReadStream(path.join(__dirname, 'index.html')).pipe(res);
+  }
+  if (req.url === '/radio.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    return fs.createReadStream(path.join(__dirname, 'radio.js')).pipe(res);
+  }
+  if (req.url === '/manifest.json') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return fs.createReadStream(path.join(__dirname, 'manifest.json')).pipe(res);
+  }
+  if (req.url === '/sw.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    return fs.createReadStream(path.join(__dirname, 'sw.js')).pipe(res);
+  }
+
   // 1. ENDPOINT DE DOWNLOAD DO APK
   if (req.url === '/download-apk') {
     const apkPath = path.join(UPLOAD_DIR, 'app.apk');
@@ -159,8 +186,10 @@ const server = http.createServer((req, res) => {
             <hr>
             <label>Versão Obrigatória (Número):</label>
             <input type="number" name="version" value="${UPDATE_CONFIG.latestVersion}" required>
-            <label>Link Curto Atual:</label>
+            <label>Link Curto APK:</label>
             <input type="text" value="${UPDATE_CONFIG.shortUrl}" readonly>
+            <label>Link Curto iPhone/Web:</label>
+            <input type="text" value="${UPDATE_CONFIG.shortWebUrl}" readonly>
             <label>Mensagem para Usuários:</label>
             <input type="text" name="message" value="${UPDATE_CONFIG.message}">
             <label>Upload do novo APK:</label>

@@ -1,0 +1,16 @@
+{
+  "name": "Conexão Sempre",
+  "short_name": "Radio",
+  "description": "Sistema de Comunicação Privada",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#004D40",
+  "icons": [
+    {
+      "src": "https://conexao-sempre.onrender.com/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
